@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
+import { Capacitor } from '@capacitor/core'; // <--- Importante para detectar se é App
 
 // IMPORTANDO TODAS AS PÁGINAS
 import LandingPage from './pages/LandingPage';
@@ -8,8 +9,18 @@ import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import Checkout from './pages/Checkout';
 import RegisterMorador from './pages/RegisterMorador';
-import NewReservation from './pages/NewReservation'; // <--- O IMPORT TEM QUE ESTAR AQUI
+import NewReservation from './pages/NewReservation'; 
 import UserProfile from './pages/UserProfile';
+
+// Componente que decide: É App ou Site?
+function HomeRedirect() {
+  // Se for "Native" (App instalado), manda pro Login
+  if (Capacitor.isNativePlatform()) {
+    return <Navigate to="/login" replace />;
+  }
+  // Se for navegador normal, mostra a Landing Page
+  return <LandingPage />;
+}
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -33,11 +44,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rotas Públicas */}
-        <Route path="/" element={<LandingPage />} />
+        {/* Rota Inteligente: Decide se mostra Landing ou Login */}
+        <Route path="/" element={<HomeRedirect />} />
+        
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/cadastro" element={<RegisterMorador />} />
         
+        {/* Ajuste no Login: Se já estiver logado, vai pro App */}
         <Route 
           path="/login" 
           element={!session ? <LoginPage /> : <Navigate to="/app" />} 
@@ -49,7 +62,6 @@ export default function App() {
           element={session ? <Dashboard /> : <Navigate to="/login" />} 
         />
         
-        {/* AQUI ESTÁ A ROTA QUE FALTAVA: */}
         <Route 
            path="/nova-reserva"
            element={session ? <NewReservation /> : <Navigate to="/login" />} 
@@ -60,7 +72,7 @@ export default function App() {
            element={session ? <UserProfile /> : <Navigate to="/login" />} 
         />
 
-        {/* Se não achar nada, joga pra Landing Page */}
+        {/* Se não achar nada, joga pra raiz (que vai decidir de novo) */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

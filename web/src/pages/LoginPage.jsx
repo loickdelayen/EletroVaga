@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { Zap, Loader2, ArrowLeft } from 'lucide-react'; // <--- Importei o ArrowLeft aqui
+import { Capacitor } from '@capacitor/core'; // Adicione este import lá em cima
 
 export default function LoginPage() {
   const navigate = useNavigate();

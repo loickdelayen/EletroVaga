@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Zap, Calendar, Shield, Smartphone, ArrowRight, Sun, MessageCircle, CheckCircle } from 'lucide-react';
+import { Calendar, Shield, Smartphone, ArrowRight, Sun, MessageCircle, CheckCircle, Zap } from 'lucide-react';
+import conceitoSolarLogo from '../assets/conceito-solar-logo.png';
+import eletroVagaLogo from '../assets/eletrovaga-logo.png';
 
 export default function LandingPage() {
   
@@ -11,8 +13,9 @@ export default function LandingPage() {
       
       {/* HEADER / NAV */}
       <nav className="flex justify-between items-center p-6 max-w-6xl mx-auto">
-        <div className="flex items-center gap-2 text-blue-600 font-bold text-xl">
-          <Zap className="fill-blue-600"/> EletroVaga
+        <div className="flex items-center">
+          {/* Logotipo da EletroVaga no cabeçalho */}
+          <img src={eletroVagaLogo} alt="EletroVaga Logo" className="h-12 md:h-14 w-auto" />
         </div>
         <div className="flex gap-4">
             <Link to="/login" className="text-gray-600 hover:text-blue-600 font-medium px-4 py-2">
@@ -25,7 +28,7 @@ export default function LandingPage() {
       </nav>
 
       {/* HERO SECTION */}
-      <header className="pt-20 pb-32 px-6 text-center max-w-4xl mx-auto">
+      <header className="pt-16 pb-32 px-6 text-center max-w-4xl mx-auto">
         <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full text-sm font-bold mb-6 border border-blue-100">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -93,7 +96,7 @@ export default function LandingPage() {
                 {/* Elemento Decorativo de Fundo */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400 opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
 
-                {/* Texto */}
+                {/* Texto e Logotipo da Parceira */}
                 <div className="flex-1 z-10">
                     <div className="flex items-center gap-2 text-yellow-400 font-bold mb-4 uppercase tracking-wider text-sm">
                         <Sun size={18} />
@@ -129,8 +132,9 @@ export default function LandingPage() {
                 {/* Lado Visual / Contato */}
                 <div className="flex-1 w-full md:w-auto z-10">
                     <div className="bg-white/10 backdrop-blur-sm border border-white/10 p-6 rounded-2xl text-center">
-                        <div className="w-16 h-16 bg-yellow-400 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-900 shadow-lg shadow-yellow-400/50">
-                            <Zap size={32} className="fill-slate-900"/>
+                        {/* Logotipo da Conceito Solar centralizado no cartão de contato */}
+                        <div className="flex justify-center mb-6">
+                            <img src={conceitoSolarLogo} alt="Conceito Solar Logo" className="h-20 w-auto" />
                         </div>
                         <h3 className="text-xl font-bold mb-1">Precisa instalar?</h3>
                         <p className="text-sm text-slate-300 mb-4">Entre em contato direto pelo WhatsApp</p>
@@ -155,8 +159,10 @@ export default function LandingPage() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-white border-t border-gray-100 py-12 text-center text-gray-400 text-sm">
-        <p>© 2025 EletroVaga. Todos os direitos reservados.</p>
+      <footer className="bg-white border-t border-gray-100 py-12 flex flex-col items-center text-center text-gray-400 text-sm">
+        {/* Logotipo da EletroVaga no rodapé */}
+        <img src={eletroVagaLogo} alt="EletroVaga" className="h-10 w-auto mb-4 opacity-75" />
+        <p>© 2025 Todos os direitos reservados.</p>
         <p className="mt-2">Em parceria com <span className="text-gray-600 font-bold">Conceito Solar</span></p>
       </footer>
 
