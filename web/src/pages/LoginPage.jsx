@@ -1,69 +1,94 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Zap, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { Zap, Loader2, ArrowLeft } from 'lucide-react'; // <--- Importei o ArrowLeft aqui
 
 export default function LoginPage() {
-  const [formData, setFormData] = useState({ email: '', password: '' });
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     
-    // LOGIN COM SENHA
     const { error } = await supabase.auth.signInWithPassword({
-      email: formData.email,
-      password: formData.password,
+      email,
+      password,
     });
 
     if (error) {
-      alert('Erro: ' + error.message);
+      alert('Erro ao entrar: ' + error.message);
       setLoading(false);
     } else {
-      // Sucesso! O App.jsx vai detectar a sessão e redirecionar
       navigate('/app');
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6">
-      <div className="bg-blue-600 p-3 rounded-xl mb-6 shadow-lg shadow-blue-200">
-        <Zap className="text-white w-8 h-8" />
-      </div>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative">
       
-      <h1 className="text-2xl font-bold text-slate-900 mb-2">Entrar no EletroVaga</h1>
-      <p className="text-gray-500 mb-8 text-center">Digite suas credenciais.</p>
+      {/* BOTÃO DE VOLTAR (Canto Superior Esquerdo) */}
+      <Link 
+        to="/" 
+        className="absolute top-6 left-6 p-3 bg-white text-gray-500 hover:text-blue-600 hover:shadow-md rounded-full transition-all border border-gray-200 flex items-center gap-2 group"
+      >
+        <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform"/>
+        <span className="text-sm font-medium hidden sm:inline">Voltar</span>
+      </Link>
 
-      <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-          <input 
-            type="email" 
-            required 
-            className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-600"
-            onChange={e => setFormData({...formData, email: e.target.value})}
-          />
+      {/* Caixa de Login */}
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+        <div className="text-center mb-8">
+            <div className="inline-flex bg-blue-50 p-3 rounded-xl mb-4">
+                <Zap className="text-blue-600 fill-blue-600" size={32}/>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">Acesse sua conta</h1>
+            <p className="text-gray-500">Bem-vindo de volta ao EletroVaga</p>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-          <input 
-            type="password" 
-            required 
-            className="w-full border border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-600"
-            onChange={e => setFormData({...formData, password: e.target.value})}
-          />
-        </div>
+        <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                <input 
+                    type="email" 
+                    required
+                    className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    placeholder="seu@email.com"
+                    onChange={e => setEmail(e.target.value)}
+                />
+            </div>
 
-        <button 
-          disabled={loading}
-          className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition-colors disabled:opacity-50 flex justify-center"
-        >
-          {loading ? <Loader2 className="animate-spin" /> : 'Entrar'}
-        </button>
-      </form>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                <input 
+                    type="password" 
+                    required
+                    className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    placeholder="••••••••"
+                    onChange={e => setPassword(e.target.value)}
+                />
+            </div>
+
+            <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-6"
+            >
+                {loading ? <Loader2 className="animate-spin"/> : 'Entrar'}
+            </button>
+        </form>
+        
+        <div className="mt-6 text-center">
+            <p className="text-sm text-gray-500">
+                Ainda não tem conta?{' '}
+                <Link to="/checkout" className="text-blue-600 font-bold hover:underline">
+                    Criar Condomínio
+                </Link>
+            </p>
+        </div>
+      </div>
     </div>
   );
 }
