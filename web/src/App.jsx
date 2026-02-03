@@ -56,7 +56,7 @@ export default function App() {
           element={!session ? <LoginPage /> : <Navigate to="/app" />} 
         />
 
-        {/* Rotas Privadas (Só entra logado) */}
+        {/* Rotas Privadas */}
         <Route 
           path="/app" 
           element={session ? <Dashboard /> : <Navigate to="/login" />} 
@@ -72,7 +72,7 @@ export default function App() {
            element={session ? <UserProfile /> : <Navigate to="/login" />} 
         />
 
-        {/* Se não achar nada, joga pra raiz (que vai decidir de novo) */}
+        {/* Se não achar nada, joga pra raiz (loop) */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

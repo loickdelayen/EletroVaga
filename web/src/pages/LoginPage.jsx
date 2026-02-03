@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
-import { Zap, Loader2, ArrowLeft } from 'lucide-react'; // <--- Importei o ArrowLeft aqui
-import { Capacitor } from '@capacitor/core'; // Adicione este import lá em cima
+import { Zap, Loader2, ArrowLeft } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -30,7 +30,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative">
       
-      {/* BOTÃO DE VOLTAR (Canto Superior Esquerdo) */}
       <Link 
         to="/" 
         className="absolute top-6 left-6 p-3 bg-white text-gray-500 hover:text-blue-600 hover:shadow-md rounded-full transition-all border border-gray-200 flex items-center gap-2 group"
