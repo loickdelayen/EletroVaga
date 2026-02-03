@@ -1,171 +1,217 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { BottomNav } from '../components/BottomNav';
-import { Calendar, LogOut, Copy, Check, Plus, Zap, User, Building } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { LogOut, Plus, Calendar, Share, Check, Zap, Users, Trash2, User, Home } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState(null);
-  const [inviteCode, setInviteCode] = useState(null);
+  const [user, setUser] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [reservations, setReservations] = useState([]); // Estado para as reservas
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    async function carregarDados() {
+    getData();
+  }, []);
+
+  const getData = async () => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return navigate('/login');
 
-      // 1. Busca perfil do usuário logado
-      let { data: profile } = await supabase
+      setUser(user);
+
+      // 1. Busca Perfil e Role
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('*, accounts(nome_condominio, invite_code)')
+        .select('account_id, role')
         .eq('id', user.id)
         .single();
-      
-      setUserProfile(profile);
-      if (profile?.accounts?.invite_code) {
-        setInviteCode(profile.accounts.invite_code);
-      }
 
-      // 2. MURAL: Busca TODAS as reservas do condomínio
-      if (profile && profile.account_id) { 
-        const hoje = new Date().toISOString().split('T')[0];
+      if (profile?.account_id) {
+        // 2. Busca Dados do Condomínio
+        const { data: accountData } = await supabase
+          .from('accounts')
+          .select('*')
+          .eq('id', profile.account_id)
+          .single();
         
-        const { data: bookings } = await supabase
-            .from('bookings')
-            .select('*, profiles(nome, apartamento)') // <-- O SQL que rodamos permite trazer isso
-            .eq('account_id', profile.account_id) 
-            .gte('data_reserva', hoje) // Só futuras
-            .order('data_reserva', { ascending: true })
-            .order('hora_inicio', { ascending: true });
-            
-        if (bookings) setReservas(bookings);
+        setAccount({ ...accountData, role: profile.role });
+
+        // 3. Busca Reservas (Somente futuras)
+        fetchReservations(profile.account_id);
       }
-      
+    } catch (error) {
+      console.error(error);
+    } finally {
       setLoading(false);
     }
-
-    carregarDados();
-  }, [navigate]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
   };
 
-  const copyInvite = () => {
-    const link = `${window.location.origin}/cadastro?convite=${inviteCode}`;
+  const fetchReservations = async (accountId) => {
+    // Supondo que sua tabela tenha: id, data_inicio, profiles(full_name, apartamento)
+    // Ajuste os campos conforme seu banco de dados real
+    const { data, error } = await supabase
+      .from('reservations')
+      .select('*, profiles(full_name, apartamento)')
+      .eq('account_id', accountId)
+      .gte('data_inicio', new Date().toISOString()) // Apenas futuras
+      .order('data_inicio', { ascending: true });
+
+    if (!error) setReservations(data);
+  };
+
+  const handleDeleteReservation = async (id) => {
+    if (!window.confirm("Tem certeza que deseja cancelar esta reserva?")) return;
+
+    const { error } = await supabase
+      .from('reservations')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert("Erro ao deletar: " + error.message);
+    } else {
+      // Atualiza a lista na tela removendo o item deletado
+      setReservations(reservations.filter(r => r.id !== id));
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (!account?.invite_code) return;
+    const link = `${window.location.origin}/cadastro?convite=${account.invite_code}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 3000);
   };
 
+  if (loading) return <div className="h-screen flex items-center justify-center">Carregando...</div>;
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 font-sans text-gray-900">
-      {/* Header */}
-      <header className="bg-blue-600 pt-12 pb-20 px-6 rounded-b-[2.5rem] shadow-xl shadow-blue-200/50 relative">
-        <div className="flex justify-between items-center text-white mb-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Zap className="text-yellow-300 fill-yellow-300" size={24}/>
-                EletroVaga
-            </h1>
-            <p className="opacity-80 text-sm">
-                {userProfile?.accounts?.nome_condominio || 'Carregando...'}
-            </p>
+    <div className="min-h-screen bg-gray-50 pb-24"> {/* pb-24 para não esconder conteudo atrás do menu */}
+      
+      {/* --- CABEÇALHO --- */}
+      <header className="bg-white py-6 px-6 shadow-sm flex justify-between items-center sticky top-0 z-10">
+        <div>
+          <div className="flex items-center gap-2 text-blue-600 font-black text-2xl">
+              <Zap className="fill-blue-600" size={28}/> EletroVaga
           </div>
-          <button onClick={handleLogout} className="bg-blue-700 p-2 rounded-lg hover:bg-blue-800 transition">
-            <LogOut size={20} />
-          </button>
+          <p className="text-gray-500 text-sm mt-1">{account?.nome_condominio}</p>
         </div>
+        {/* Botão Sair discreto no topo */}
+        <button onClick={() => supabase.auth.signOut().then(() => navigate('/login'))} className="text-gray-400 hover:text-red-600">
+          <LogOut size={20} />
+        </button>
       </header>
 
-      {/* Área do Síndico */}
-      {inviteCode && userProfile?.role === 'admin' && (
-        <div className="px-6 -mt-10 mb-6 relative z-10">
-            <div className="bg-slate-900 text-white p-5 rounded-xl shadow-lg border border-slate-800">
-                <p className="text-xs text-blue-400 font-bold uppercase tracking-wider mb-2">💎 Área do Síndico</p>
-                <div className="flex items-center gap-2 bg-black/30 p-3 rounded-lg border border-white/10" onClick={copyInvite}>
-                    <code className="text-xs flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-blue-200 font-mono">
-                        {window.location.origin}/cadastro?convite={inviteCode}
-                    </code>
-                    <button className="text-white hover:text-blue-400 transition-colors">
-                        {copied ? <Check size={18} className="text-green-400"/> : <Copy size={18}/>}
-                    </button>
+      <main className="p-6 max-w-3xl mx-auto space-y-6">
+
+        {/* --- ÁREA DO SÍNDICO (Convite) --- */}
+        {account?.role === 'admin' && (
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-blue-100 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+                <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+                    <Users size={24} />
+                </div>
+                <div>
+                    <h3 className="font-bold text-gray-900">Convite Moradores</h3>
+                    <p className="text-gray-500 text-xs">Link para cadastro no condomínio.</p>
                 </div>
             </div>
-        </div>
-      )}
+            <button 
+                onClick={handleCopyLink}
+                className={`w-full md:w-auto flex justify-center items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${copied ? 'bg-green-100 text-green-700' : 'bg-blue-600 text-white'}`}
+            >
+                {copied ? <><Check size={16}/> Copiado</> : <><Share size={16}/> Copiar Link</>}
+            </button>
+          </div>
+        )}
 
-      {/* Botão Nova Reserva */}
-      <div className={`px-6 ${userProfile?.role === 'admin' ? '' : '-mt-8 relative z-10'}`}>
-        <Link to="/nova-reserva" className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl shadow-lg shadow-blue-300 flex items-center justify-between group transition-all">
-            <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                    <Plus size={24} className="text-white"/>
-                </div>
-                <div className="text-left">
-                    <p className="font-bold text-lg">Nova Reserva</p>
-                    <p className="text-blue-100 text-sm">Agendar horário</p>
-                </div>
+        {/* --- BOTÃO NOVA RESERVA --- */}
+        <button 
+          onClick={() => navigate('/nova-reserva')}
+          className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="bg-white/20 p-3 rounded-full group-hover:scale-110 transition-transform">
+              <Plus size={32} />
             </div>
-            <div className="bg-white/10 p-2 rounded-full group-hover:bg-white/20 transition">
-                <Calendar size={20}/>
+            <div className="text-left">
+              <h2 className="text-2xl font-bold">Nova Reserva</h2>
+              <p className="text-blue-100">Agendar horário</p>
             </div>
-        </Link>
-      </div>
+          </div>
+          <Calendar size={40} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+        </button>
 
-      {/* MURAL DE RESERVAS */}
-      <main className="px-6 mt-8">
-        <h2 className="font-bold text-gray-800 flex items-center gap-2 mb-4 text-lg">
-            Mural do Condomínio
-        </h2>
-
-        {loading ? (
-            <div className="flex justify-center py-10"><span className="animate-spin text-blue-600"><Zap/></span></div>
-        ) : reservas.length === 0 ? (
-            <div className="text-center py-10 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                <Calendar className="mx-auto text-gray-300 mb-2" size={40}/>
-                <p className="text-gray-500">Nenhum agendamento futuro.</p>
-                <p className="text-sm text-gray-400">A fila está livre!</p>
+        {/* --- MURAL DE RESERVAS --- */}
+        <div>
+          <h3 className="font-bold text-lg text-gray-900 mb-4 ml-1 flex items-center gap-2">
+            <Calendar size={20} className="text-blue-600"/> Próximos Agendamentos
+          </h3>
+          
+          {reservations.length === 0 ? (
+            <div className="bg-white p-8 rounded-2xl shadow-sm text-center border border-gray-100">
+              <p className="text-gray-400 font-medium">A fila está livre! ⚡</p>
+              <p className="text-gray-400 text-sm">Nenhum agendamento futuro.</p>
             </div>
-        ) : (
+          ) : (
             <div className="space-y-3">
-              {reservas.map((reserva) => (
-                <div key={reserva.id} className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              {reservations.map((reserva) => (
+                <div key={reserva.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
                   
-                  {/* Cabeçalho do Card */}
-                  <div className="flex items-center p-3 border-b border-gray-50">
-                    <div className="bg-blue-50 text-blue-700 font-bold p-2 rounded-lg mr-3 text-center min-w-[60px]">
-                        {reserva.hora_inicio.slice(0,5)}
+                  {/* Informações da Reserva */}
+                  <div className="flex items-center gap-4">
+                    <div className="bg-gray-100 h-12 w-12 rounded-lg flex flex-col items-center justify-center text-gray-600 font-bold leading-none">
+                      <span className="text-xs uppercase">{new Date(reserva.data_inicio).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}</span>
+                      <span className="text-xl">{new Date(reserva.data_inicio).getDate()}</span>
                     </div>
                     <div>
-                        {/* AQUI ESTÁ O MURAL VISÍVEL PARA TODOS */}
-                        <div className="font-bold text-gray-800 flex items-center gap-2">
-                             <User size={16} className="text-gray-400"/> 
-                             {reserva.profiles?.nome || 'Vizinho'}
-                        </div>
-                        <div className="text-xs text-gray-500 flex items-center gap-1">
-                            <Building size={12}/>
-                            Apt {reserva.profiles?.apartamento}
-                        </div>
+                      <p className="font-bold text-gray-900">
+                        {new Date(reserva.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {reserva.profiles?.full_name || 'Morador'} • Apt {reserva.profiles?.apartamento || '-'}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Rodapé do Card */}
-                  <div className="bg-gray-50 px-3 py-2 flex justify-between items-center text-xs text-gray-500">
-                     <span>{new Date(reserva.data_reserva + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                     <span className="font-bold text-blue-600">Carregador 0{reserva.charger_id}</span>
-                  </div>
+                  {/* Lixeira (Só para Admin ou Dono da reserva) */}
+                  {(account?.role === 'admin' || user.id === reserva.user_id) && (
+                    <button 
+                      onClick={() => handleDeleteReservation(reserva.id)}
+                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Cancelar Reserva"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
-        )}
+          )}
+        </div>
       </main>
 
-      <BottomNav />
+      {/* --- MENU INFERIOR (App Style) --- */}
+      <nav className="fixed bottom-0 w-full bg-white border-t border-gray-200 py-3 px-6 flex justify-around items-center z-20 safe-area-bottom">
+        <button className="flex flex-col items-center gap-1 text-blue-600">
+          <Home size={24} className="fill-current"/>
+          <span className="text-xs font-medium">Início</span>
+        </button>
+        
+        <div className="w-px h-8 bg-gray-200"></div>
+
+        <button 
+          onClick={() => navigate('/perfil')}
+          className="flex flex-col items-center gap-1 text-gray-400 hover:text-blue-600 transition-colors"
+        >
+          <User size={24} />
+          <span className="text-xs font-medium">Perfil</span>
+        </button>
+      </nav>
+
     </div>
   );
 }
