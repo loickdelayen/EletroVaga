@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Building, LogOut, ShieldCheck, CreditCard } from 'lucide-react';
+import { User, Mail, Building, LogOut, ShieldCheck, CreditCard, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import SubscriptionButton from '../components/SubscriptionButton'; // <--- Importamos o botão aqui
+import SubscriptionButton from '../components/SubscriptionButton';
 
 export default function UserProfile() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function UserProfile() {
       if (user) {
         const { data, error } = await supabase
           .from('profiles')
-          .select('*, accounts(nome_condominio, plano)') // Busca dados do perfil + condomínio
+          .select('*, accounts(nome_condominio, plano)')
           .eq('id', user.id)
           .single();
 
@@ -43,6 +43,16 @@ export default function UserProfile() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
+      
+      {/* --- BOTÃO VOLTAR (NOVO) --- */}
+      <button 
+        onClick={() => navigate('/app')} 
+        className="flex items-center gap-2 text-gray-500 hover:text-blue-600 mb-6 transition-colors font-medium"
+      >
+        <ArrowLeft size={20} />
+        Voltar para o Dashboard
+      </button>
+
       <h1 className="text-2xl font-bold mb-8 flex items-center gap-2">
         <User className="text-blue-600" /> Meu Perfil
       </h1>
@@ -80,8 +90,7 @@ export default function UserProfile() {
             </div>
           </div>
 
-          {/* --- AQUI ESTÁ A PROTEÇÃO --- */}
-          {/* Só mostra essa área se o user for ADMIN */}
+          {/* Área do Admin */}
           {profile?.role === 'admin' && (
             <div className="mt-8 pt-8 border-t border-gray-100">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-gray-900">
@@ -98,7 +107,6 @@ export default function UserProfile() {
                         <CreditCard className="text-blue-300" size={32}/>
                     </div>
                     
-                    {/* O BOTÃO MÁGICO QUE CRIAMOS */}
                     <SubscriptionButton />
                     
                     <p className="text-xs text-blue-600 mt-3">

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Calendar, Shield, Smartphone, ArrowRight, Sun, MessageCircle, CheckCircle, Zap } from 'lucide-react';
 import conceitoSolarLogo from '../assets/conceito-solar-logo.png';
-import eletroVagaLogo from '../assets/eletrovaga-logo.png';
+import eletroVagaLogo from '../assets/eletrovagas-logo.png';
 
 export default function LandingPage() {
   

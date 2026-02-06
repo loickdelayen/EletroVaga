@@ -98,7 +98,7 @@ export default function RegisterMorador() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Apartamento</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Apartamento(somente o número)</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"><Home size={18}/></div>
                   <input required type="text" className="pl-10 block w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500" placeholder="Ex: 101"
