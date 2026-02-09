@@ -19,13 +19,19 @@ export default function NewReservation() {
     setLoading(true);
 
     try {
-      // REGRA 1: Validar horário (Max 2h)
+      // REGRA 1: Validar horário (Max 2h) e se final é maior que inicial
       const inicio = new Date(`2000-01-01T${formData.hora_inicio}`);
       const fim = new Date(`2000-01-01T${formData.hora_fim}`);
       const diffHoras = (fim - inicio) / 1000 / 60 / 60;
 
       if (diffHoras <= 0) throw new Error("A hora final deve ser maior que a inicial.");
       if (diffHoras > 2) throw new Error("Regra: Máximo de 2 horas por reserva.");
+
+      // REGRA EXTRA: Não reservar no passado
+      const hoje = new Date().toISOString().split('T')[0];
+      if (formData.data_reserva < hoje) {
+          throw new Error("Você não pode fazer reservas em datas passadas.");
+      }
 
       // 2. Pega usuário logado
       const { data: { user } } = await supabase.auth.getUser();
@@ -40,53 +46,57 @@ export default function NewReservation() {
 
       if (!profile) throw new Error("Perfil não encontrado.");
 
-      // --- CORREÇÃO AQUI ---
       // 4. REGRA DE JUSTIÇA (POR APARTAMENTO)
-      // Primeiro: Descobre quem são TODOS os moradores desse apartamento (João, Pedro, etc)
       const { data: moradoresDoAp } = await supabase
         .from('profiles')
         .select('id')
         .eq('account_id', profile.account_id)
-        .eq('apartamento', profile.apartamento); // <--- Pega todos do Apt 101
+        .eq('apartamento', profile.apartamento);
 
       const idsDoApartamento = moradoresDoAp.map(m => m.id);
-
-      // Segundo: Verifica se ALGUM desses moradores já tem reserva ativa
-      const hoje = new Date().toISOString().split('T')[0];
       
       const { data: reservasDoAp } = await supabase
-        .from('bookings')
-        .select('*')
-        .in('user_id', idsDoApartamento) // <--- Verifica a lista de moradores, não só o logado
-        .gte('data_reserva', hoje);
+        .from('reservations')
+        .select('id')
+        .in('user_id', idsDoApartamento)
+        .gte('data_inicio', hoje + 'T00:00:00') // Mudança: usar data_inicio
+        .limit(1);
 
       if (reservasDoAp && reservasDoAp.length > 0) {
-        throw new Error(`O Apartamento ${profile.apartamento} já possui uma reserva agendada. A regra é uma por vez por apartamento.`);
+        throw new Error(`O Apartamento ${profile.apartamento} já possui uma reserva ativa. A regra é uma por vez por apartamento.`);
       }
 
-      // 5. Verifica choque de horário no carregador (padrão)
-      const { data: choque } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('charger_id', formData.charger_id)
-        .eq('data_reserva', formData.data_reserva)
-        .or(`and(hora_inicio.lte.${formData.hora_inicio},hora_fim.gt.${formData.hora_inicio}),and(hora_inicio.lt.${formData.hora_fim},hora_fim.gte.${formData.hora_fim})`);
+      // --- CORREÇÃO AQUI (REGRA 5) ---
+      // Monta as datas completas (Data + Hora) para enviar pro banco
+      const startDateTime = `${formData.data_reserva}T${formData.hora_inicio}:00`;
+      const endDateTime = `${formData.data_reserva}T${formData.hora_fim}:00`;
 
+      // 5. Verifica choque de horário (Usando a estrutura nova do banco: data_inicio e data_fim)
+      const { data: choque, error: errorChoque } = await supabase
+        .from('reservations')
+        .select('id')
+        .eq('account_id', profile.account_id)
+        .eq('charger_id', parseInt(formData.charger_id))
+        // Lógica: Se o novo início for menor que um fim existente E o novo fim for maior que um início existente = CHOQUE
+        .lt('data_inicio', endDateTime)
+        .gt('data_fim', startDateTime);
+
+      if (errorChoque) throw new Error("Erro ao verificar disponibilidade: " + errorChoque.message);
+      
       if (choque && choque.length > 0) {
-         throw new Error("Já existe uma reserva neste horário e carregador.");
+         throw new Error("Ops! Já existe uma reserva para este carregador nesse horário.");
       }
 
-      // 6. Salva
-      const { error } = await supabase.from('bookings').insert({
+      // 6. Salva (Usando a estrutura nova do banco)
+      const { error } = await supabase.from('reservations').insert({
         user_id: user.id,
         account_id: profile.account_id,
         charger_id: parseInt(formData.charger_id),
-        data_reserva: formData.data_reserva,
-        hora_inicio: formData.hora_inicio,
-        hora_fim: formData.hora_fim
+        data_inicio: startDateTime, // Novo formato
+        data_fim: endDateTime       // Novo formato
       });
 
-      if (error) throw error;
+      if (error) throw new Error("Erro ao salvar reserva: " + error.message);
 
       alert('Agendado com sucesso!');
       navigate('/app');
