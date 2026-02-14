@@ -45,14 +45,25 @@ export default function Dashboard() {
     finally { setLoading(false); }
   };
 
-  const fetchReservations = async (accountId) => {
-    const { data } = await supabase
+ const fetchReservations = async (accountId) => {
+    // Truque do Fuso Horário:
+    // Pegamos a data de "Ontem" para garantir que o filtro não esconda as reservas de hoje
+    const dataSegura = new Date();
+    dataSegura.setDate(dataSegura.getDate() - 1); 
+
+    const { data, error } = await supabase
       .from('reservations')
-      .select('*, profiles(full_name, apartamento, id)') // Pegamos o ID para saber se é dono da reserva
+      .select('*, profiles(full_name, apartamento, id)') 
       .eq('account_id', accountId)
-      .gte('data_inicio', new Date().toISOString())
+      // Usamos a dataSegura em vez do new Date() direto
+      .gte('data_inicio', dataSegura.toISOString()) 
       .order('data_inicio', { ascending: true });
-    setReservations(data || []);
+
+    if (error) {
+      console.error('Erro ao buscar reservas:', error);
+    } else {
+      setReservations(data || []);
+    }
   };
 
   const handleDeleteReservation = async (id) => {

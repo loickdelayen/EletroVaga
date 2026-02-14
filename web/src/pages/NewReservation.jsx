@@ -20,9 +20,10 @@ export default function NewReservation() {
 
     try {
       // REGRA 1: Validar horário (Max 2h) e se final é maior que inicial
-      const inicio = new Date(`2000-01-01T${formData.hora_inicio}`);
-      const fim = new Date(`2000-01-01T${formData.hora_fim}`);
-      const diffHoras = (fim - inicio) / 1000 / 60 / 60;
+      // Criamos datas fictícias para comparar apenas as horas
+      const inicioTemp = new Date(`2000-01-01T${formData.hora_inicio}`);
+      const fimTemp = new Date(`2000-01-01T${formData.hora_fim}`);
+      const diffHoras = (fimTemp - inicioTemp) / 1000 / 60 / 60;
 
       if (diffHoras <= 0) throw new Error("A hora final deve ser maior que a inicial.");
       if (diffHoras > 2) throw new Error("Regra: Máximo de 2 horas por reserva.");
@@ -59,25 +60,29 @@ export default function NewReservation() {
         .from('reservations')
         .select('id')
         .in('user_id', idsDoApartamento)
-        .gte('data_inicio', hoje + 'T00:00:00') // Mudança: usar data_inicio
+        .gte('data_inicio', new Date().toISOString()) // Garante que pega reservas atuais
         .limit(1);
 
       if (reservasDoAp && reservasDoAp.length > 0) {
         throw new Error(`O Apartamento ${profile.apartamento} já possui uma reserva ativa. A regra é uma por vez por apartamento.`);
       }
 
-      // --- CORREÇÃO AQUI (REGRA 5) ---
-      // Monta as datas completas (Data + Hora) para enviar pro banco
-      const startDateTime = `${formData.data_reserva}T${formData.hora_inicio}:00`;
-      const endDateTime = `${formData.data_reserva}T${formData.hora_fim}:00`;
+      // --- CORREÇÃO DE FUSO HORÁRIO ---
+      // Criamos a data baseada no input do usuário (Brasil)
+      const dataLocalInicio = new Date(`${formData.data_reserva}T${formData.hora_inicio}`);
+      const dataLocalFim = new Date(`${formData.data_reserva}T${formData.hora_fim}`);
 
-      // 5. Verifica choque de horário (Usando a estrutura nova do banco: data_inicio e data_fim)
+      // Convertemos para UTC antes de enviar ao banco
+      const startDateTime = dataLocalInicio.toISOString();
+      const endDateTime = dataLocalFim.toISOString();
+      // --------------------------------
+
+      // 5. Verifica choque de horário (Usando os horários corrigidos em UTC)
       const { data: choque, error: errorChoque } = await supabase
         .from('reservations')
         .select('id')
         .eq('account_id', profile.account_id)
         .eq('charger_id', parseInt(formData.charger_id))
-        // Lógica: Se o novo início for menor que um fim existente E o novo fim for maior que um início existente = CHOQUE
         .lt('data_inicio', endDateTime)
         .gt('data_fim', startDateTime);
 
@@ -87,13 +92,13 @@ export default function NewReservation() {
          throw new Error("Ops! Já existe uma reserva para este carregador nesse horário.");
       }
 
-      // 6. Salva (Usando a estrutura nova do banco)
+      // 6. Salva (Com datas em UTC)
       const { error } = await supabase.from('reservations').insert({
         user_id: user.id,
         account_id: profile.account_id,
         charger_id: parseInt(formData.charger_id),
-        data_inicio: startDateTime, // Novo formato
-        data_fim: endDateTime       // Novo formato
+        data_inicio: startDateTime, 
+        data_fim: endDateTime       
       });
 
       if (error) throw new Error("Erro ao salvar reserva: " + error.message);

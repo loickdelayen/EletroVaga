@@ -1,22 +1,21 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-// import { useNavigate } from 'react-router-dom'; // Não precisa navegar agora, o Stripe vai redirecionar
 import { Check, Shield, Zap, Loader2, ArrowLeft, CreditCard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Checkout() {
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1 = Form, 2 = Processando
   
   const [formData, setFormData] = useState({
     nome_condominio: '',
+    full_name: '', // Nome do Síndico
     email: '',
     password: '',
     confirmPassword: ''
   });
 
   const handleSignup = async (e) => {
-    e.preventDefault(); // <--- ESSENCIAL PARA NÃO RECARREGAR A PÁGINA
+    e.preventDefault(); 
     
     if (formData.password !== formData.confirmPassword) {
       alert('As senhas não coincidem');
@@ -32,7 +31,7 @@ export default function Checkout() {
         password: formData.password,
         options: {
           data: {
-            full_name: 'Síndico (Admin)', 
+            full_name: formData.full_name, 
             role: 'admin' 
           }
         }
@@ -48,13 +47,13 @@ export default function Checkout() {
       const randomNum = Math.floor(1000 + Math.random() * 9000);
       const inviteCode = `${codeName}-${randomNum}`;
 
-      // 3. Criar o Condomínio no Banco (Status PENDENTE)
+      // 3. Criar o Condomínio no Banco
       const { data: accountData, error: accountError } = await supabase
         .from('accounts')
         .insert({
           nome_condominio: formData.nome_condominio,
           plano: 'pro',
-          status: 'pending_payment', // <--- IMPORTANTE: Começa bloqueado até pagar
+          status: 'pending_payment', 
           invite_code: inviteCode
         })
         .select()
@@ -62,35 +61,36 @@ export default function Checkout() {
 
       if (accountError) throw accountError;
 
-      // 4. Vincular Usuário ao Condomínio
+      // 4. CRIAR O PERFIL MANUALMENTE (Aqui está o segredo!)
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({
-          account_id: accountData.id,
+        .insert({
+          id: userId,
+          email: formData.email,
+          full_name: formData.full_name,
+          nome: formData.full_name, // Garantia para coluna antiga
           role: 'admin',
-          apartamento: 'ADM'
-        })
-        .eq('id', userId);
+          account_id: accountData.id,
+          apartamento: 'ADM',
+          modelo_carro: null // Síndico não precisa de carro agora
+        });
 
-      if (profileError) throw profileError;
+      if (profileError) throw new Error("Erro ao salvar perfil: " + profileError.message);
 
-      // ------------------------------------------
-      // 5. AQUI ENTRA A MÁGICA DO STRIPE 💸
-      // ------------------------------------------
+      // 5. Integração com Stripe
       const { data, error: functionError } = await supabase.functions.invoke('create-checkout', {
         body: {
           price_base_id: import.meta.env.VITE_STRIPE_PRICE_BASE,
           email: formData.email,
           user_id: userId,
-          return_url: window.location.origin // Vai voltar para seu site depois de pagar
+          return_url: window.location.origin 
         }
       });
 
       if (functionError) throw functionError;
 
-      // 6. Redirecionar para o Stripe
       if (data?.url) {
-        window.location.href = data.url; // <--- TCHAU! Vai pro Stripe
+        window.location.href = data.url; 
       } else {
         throw new Error("O Stripe não devolveu o link de pagamento.");
       }
@@ -104,12 +104,8 @@ export default function Checkout() {
 
   return (
     <div className="min-h-screen bg-white font-sans">
-      {/* Header */}
       <header className="p-6 border-b border-gray-100 flex items-center gap-4">
-        <Link 
-          to="/" 
-          className="p-2 -ml-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
-        >
+        <Link to="/" className="p-2 -ml-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all">
           <ArrowLeft size={24} />
         </Link>
         <div className="flex items-center gap-2 text-blue-600 font-bold text-xl">
@@ -118,8 +114,7 @@ export default function Checkout() {
       </header>
 
       <main className="max-w-4xl mx-auto p-6 flex flex-col md:flex-row gap-12 mt-8">
-        
-        {/* Lado Esquerdo - Benefícios */}
+        {/* Lado Esquerdo - Mantido igual ao original */}
         <div className="flex-1 space-y-8">
           <div>
             <h1 className="text-4xl font-extrabold text-gray-900 mb-4">Plano Profissional</h1>
@@ -129,92 +124,32 @@ export default function Checkout() {
             </div>
             <p className="text-lg text-gray-600">Gestão completa de carregadores e cobranças.</p>
           </div>
-          
           <ul className="space-y-4">
-            <li className="flex gap-3 items-center">
-              <div className="bg-green-100 p-2 rounded-full"><Check size={20} className="text-green-600"/></div>
-              <span className="font-medium text-gray-700">Até 2 Carregadores Inclusos</span>
-            </li>
-            <li className="flex gap-3 items-center">
-              <div className="bg-green-100 p-2 rounded-full"><Check size={20} className="text-green-600"/></div>
-              <span className="font-medium text-gray-700">App Ilimitado para Moradores</span>
-            </li>
-            <li className="flex gap-3 items-center">
-               <div className="bg-green-100 p-2 rounded-full"><Check size={20} className="text-green-600"/></div>
-               <span className="font-medium text-gray-700">Gestão Financeira Automática</span>
-            </li>
+            <li className="flex gap-3 items-center"><div className="bg-green-100 p-2 rounded-full"><Check size={20} className="text-green-600"/></div><span className="font-medium text-gray-700">Até 2 Carregadores Inclusos</span></li>
+            <li className="flex gap-3 items-center"><div className="bg-green-100 p-2 rounded-full"><Check size={20} className="text-green-600"/></div><span className="font-medium text-gray-700">App Ilimitado para Moradores</span></li>
+            <li className="flex gap-3 items-center"><div className="bg-green-100 p-2 rounded-full"><Check size={20} className="text-green-600"/></div><span className="font-medium text-gray-700">Gestão Financeira Automática</span></li>
           </ul>
-
-          <div className="bg-gray-50 p-4 rounded-xl flex gap-3 items-start">
-              <Shield className="text-blue-600 mt-1"/>
-              <p className="text-sm text-gray-500">Pagamento seguro via Stripe. Cancele quando quiser.</p>
-          </div>
+          <div className="bg-gray-50 p-4 rounded-xl flex gap-3 items-start"><Shield className="text-blue-600 mt-1"/><p className="text-sm text-gray-500">Pagamento seguro via Stripe. Cancele quando quiser.</p></div>
         </div>
 
         {/* Lado Direito - Formulário */}
         <div className="flex-1">
             <form onSubmit={handleSignup} className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
                 <h2 className="text-xl font-bold mb-6">Criar Conta do Condomínio</h2>
-                
                 <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Condomínio</label>
-                        <input 
-                            required 
-                            type="text" 
-                            className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Ex: Residencial Flores"
-                            onChange={e => setFormData({...formData, nome_condominio: e.target.value})}
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">E-mail do Síndico</label>
-                        <input 
-                            required 
-                            type="email" 
-                            className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="sindico@email.com"
-                            onChange={e => setFormData({...formData, email: e.target.value})}
-                        />
-                    </div>
-
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome do Condomínio</label><input required type="text" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Residencial Flores" onChange={e => setFormData({...formData, nome_condominio: e.target.value})}/></div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Nome do Síndico</label><input required type="text" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Seu nome completo" onChange={e => setFormData({...formData, full_name: e.target.value})}/></div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-1">E-mail do Síndico</label><input required type="email" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" placeholder="sindico@email.com" onChange={e => setFormData({...formData, email: e.target.value})}/></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                            <input 
-                                required 
-                                type="password" 
-                                className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
-                                onChange={e => setFormData({...formData, password: e.target.value})}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar</label>
-                            <input 
-                                required 
-                                type="password" 
-                                className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500"
-                                onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
-                            />
-                        </div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Senha</label><input required type="password" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" onChange={e => setFormData({...formData, password: e.target.value})}/></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Confirmar</label><input required type="password" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500" onChange={e => setFormData({...formData, confirmPassword: e.target.value})}/></div>
                     </div>
                 </div>
-
-                <button 
-                    type="submit" 
-                    disabled={loading}
-                    className="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold p-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-70"
-                >
-                    {loading ? (
-                        <><Loader2 className="animate-spin"/> Preparando Pagamento...</>
-                    ) : (
-                        <><CreditCard size={20}/> Ir para Pagamento Seguro</>
-                    )}
+                <button type="submit" disabled={loading} className="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold p-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-70">
+                    {loading ? <><Loader2 className="animate-spin"/> Preparando Pagamento...</> : <><CreditCard size={20}/> Ir para Pagamento Seguro</>}
                 </button>
             </form>
         </div>
-
       </main>
     </div>
   );
