@@ -49,70 +49,103 @@ export default function Checkout() {
     }
   };
 
-  const handleSignup = async (e) => {
-    e.preventDefault(); 
-    
+const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
     if (formData.password !== formData.confirmPassword) {
       alert('As senhas não coincidem');
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-
     try {
-      // 1. Criar Usuário
+      let userId = null;
+
+      // 1. Tenta Criar o Usuário
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: { data: { full_name: formData.full_name, role: 'admin' } }
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Erro ao criar usuário");
-      const userId = authData.user.id;
+      if (authError) {
+        // SE O ERRO FOR "USUÁRIO JÁ EXISTE", VAMOS TENTAR LOGAR ELE
+        if (authError.message.includes("User already registered") || authError.status === 422) {
+            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+                email: formData.email,
+                password: formData.password
+            });
+            
+            if (loginError) {
+                throw new Error("Este e-mail já existe. Tente fazer login ou use outro e-mail.");
+            }
+            // Se logou, pegamos o ID dele para continuar o pagamento
+            userId = loginData.user.id;
+        } else {
+            throw authError; // Se for outro erro, estoura
+        }
+      } else {
+        // Se criou agora
+        userId = authData.user?.id;
+      }
 
-      // 2. Gerar Código
-      const codeName = formData.nome_condominio.split(' ')[0].toUpperCase().substring(0, 5);
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      const inviteCode = `${codeName}-${randomNum}`;
+      if (!userId) throw new Error("Erro ao identificar usuário.");
 
-      // 3. Criar Conta (Salvando quantos carregadores o plano tem)
-      const { data: accountData, error: accountError } = await supabase
-        .from('accounts')
-        .insert({
-          nome_condominio: formData.nome_condominio,
-          plano: 'pro',
-          max_chargers: chargersCount, // <--- Salvamos o limite no banco
-          status: 'pending_payment', 
-          invite_code: inviteCode
-        })
-        .select()
+      // 2. Verifica se ele já tem uma Account (Condomínio)
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('account_id')
+        .eq('id', userId)
         .single();
 
-      if (accountError) throw accountError;
+      let accountId = existingProfile?.account_id;
 
-      // 4. Criar Perfil
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          email: formData.email,
-          full_name: formData.full_name,
-          nome: formData.full_name,
-          role: 'admin',
-          account_id: accountData.id,
-          apartamento: 'ADM'
-        });
+      // Se não tem conta, cria uma nova
+      if (!accountId) {
+          const codeName = formData.nome_condominio.split(' ')[0].toUpperCase().substring(0, 5);
+          const randomNum = Math.floor(1000 + Math.random() * 9000);
+          const inviteCode = `${codeName}-${randomNum}`;
 
-      if (profileError) throw new Error("Erro ao salvar perfil: " + profileError.message);
+          const { data: accountData, error: accountError } = await supabase
+            .from('accounts')
+            .insert({
+              nome_condominio: formData.nome_condominio,
+              plano: 'pro',
+              max_chargers: chargersCount,
+              status: 'pending_payment', 
+              invite_code: inviteCode
+            })
+            .select()
+            .single();
 
-      // 5. Integração com Stripe (ENVIA O ID DO PLANO ESCOLHIDO)
-      // Aqui está a correção principal: Usamos o ID da lista, não do .env
+          if (accountError) throw accountError;
+          accountId = accountData.id;
+
+          // Cria/Atualiza o Perfil
+          await supabase.from('profiles').upsert({
+              id: userId,
+              email: formData.email,
+              full_name: formData.full_name,
+              nome: formData.full_name,
+              role: 'admin',
+              account_id: accountId,
+              apartamento: 'ADM'
+          });
+      } else {
+          // Se já existe conta mas ele voltou, atualiza o plano/carregadores escolhidos
+           await supabase
+            .from('accounts')
+            .update({ max_chargers: chargersCount })
+            .eq('id', accountId);
+      }
+
+      // 3. Manda pro Stripe (Isso sempre acontece)
       const selectedPlanId = PLANOS[chargersCount].id; 
 
       const { data, error: functionError } = await supabase.functions.invoke('create-checkout', {
         body: {
-          price_base_id: selectedPlanId, // <--- ID Dinâmico enviado aqui
+          price_base_id: selectedPlanId,
           email: formData.email,
           user_id: userId,
           return_url: window.location.origin 
@@ -124,12 +157,12 @@ export default function Checkout() {
       if (data?.url) {
         window.location.href = data.url; 
       } else {
-        throw new Error("O Stripe não devolveu o link de pagamento.");
+        throw new Error("Erro ao gerar link de pagamento.");
       }
 
     } catch (error) {
-      console.error(error);
-      alert('Erro: ' + (error.message || "Erro desconhecido"));
+      alert(error.message);
+    } finally {
       setLoading(false);
     }
   };

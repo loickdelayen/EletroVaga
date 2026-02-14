@@ -155,7 +155,7 @@ export default function LandingPage() {
         <Link to="/checkout" className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-4 rounded-xl font-bold shadow-xl shadow-blue-200 transition-all">
             Criar Conta do Condomínio
         </Link>
-        <p className="mt-4 text-gray-500 text-sm">Teste grátis. Cancele quando quiser.</p>
+        <p className="mt-4 text-gray-500 text-sm">Cancele quando quiser.</p>
       </section>
 
       {/* FOOTER */}
