@@ -138,9 +138,12 @@ export default function LandingPage() {
                         </div>
                         <h3 className="text-xl font-bold mb-1">Precisa instalar?</h3>
                         <p className="text-sm text-slate-300 mb-4">Entre em contato direto pelo WhatsApp</p>
-                        <p className="text-2xl font-mono font-bold text-white tracking-wider">
+                        
+                        {/* AQUI ESTÁ A CORREÇÃO DO TELEFONE */}
+                        <p className="text-lg md:text-2xl font-mono font-bold text-white tracking-wider whitespace-nowrap">
                             (71) 9 9957-9525
                         </p>
+                        
                         <p className="text-xs text-slate-400 mt-2">Atendimento Especializado</p>
                     </div>
                 </div>
