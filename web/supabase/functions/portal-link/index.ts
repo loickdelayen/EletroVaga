@@ -14,27 +14,50 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  // Trata requisições OPTIONS (CORS)
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
 
   try {
-    // 1. Pega o usuário logado
+    // 1. Configura o cliente Supabase com o token do usuário
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
 
+    // 2. Verifica quem está logado
     const { data: { user } } = await supabaseClient.auth.getUser()
-    if (!user) throw new Error("Usuário não logado")
+    if (!user) throw new Error("Usuário não autenticado")
 
-    // 2. Busca o cliente no Stripe pelo email
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 })
-    if (customers.data.length === 0) throw new Error("Cliente não encontrado no Stripe")
+    // 3. Busca o account_id no perfil
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('account_id')
+      .eq('id', user.id)
+      .single()
 
-    // 3. Gera o link do portal
+    if (!profile?.account_id) throw new Error("Usuário não tem condomínio vinculado.")
+
+    // 4. Busca o ID DO STRIPE na tabela accounts (O jeito seguro) 🔒
+    const { data: account } = await supabaseClient
+      .from('accounts')
+      .select('stripe_customer_id')
+      .eq('id', profile.account_id)
+      .single()
+
+    const stripeCustomerId = account?.stripe_customer_id
+
+    // Se não tiver ID no banco, aí sim dá erro
+    if (!stripeCustomerId) {
+        throw new Error("ID do Stripe não encontrado. Entre em contato com o suporte.")
+    }
+
+    // 5. Gera o link do portal usando o ID exato
     const session = await stripe.billingPortal.sessions.create({
-      customer: customers.data[0].id,
-      return_url: `${req.headers.get('origin')}/app`, // Onde ele volta depois de editar
+      customer: stripeCustomerId, 
+      return_url: `${req.headers.get('origin')}/dashboard`, // Mudei para /dashboard para voltar pra tela certa
     })
 
     return new Response(JSON.stringify({ url: session.url }), {
@@ -42,8 +65,10 @@ serve(async (req) => {
     })
 
   } catch (error: any) {
+    console.error(error)
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+      status: 400,
     })
   }
 })
