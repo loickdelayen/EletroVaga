@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { BottomNav } from '../components/BottomNav';
@@ -7,6 +7,10 @@ import { Clock, Calendar, Zap, ArrowLeft, Loader2, AlertTriangle } from 'lucide-
 export default function NewReservation() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  
+  // NOVO ESTADO: Guarda o limite de carregadores do condomínio (Padrão: 2)
+  const [maxChargers, setMaxChargers] = useState(2); 
+
   const [formData, setFormData] = useState({
     charger_id: '1',
     data_reserva: '',
@@ -14,13 +18,46 @@ export default function NewReservation() {
     hora_fim: ''
   });
 
+  // --- NOVA FUNÇÃO: Busca o limite de carregadores ao abrir a tela ---
+  useEffect(() => {
+    const fetchAccountData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Pega o condomínio do morador
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('account_id')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.account_id) {
+          // Pega o limite de carregadores na tabela accounts
+          const { data: account } = await supabase
+            .from('accounts')
+            .select('max_chargers')
+            .eq('id', profile.account_id)
+            .single();
+
+          if (account?.max_chargers) {
+            setMaxChargers(account.max_chargers);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao buscar limite de carregadores:", error);
+      }
+    };
+
+    fetchAccountData();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // REGRA 1: Validar horário (Max 2h) e se final é maior que inicial
-      // Criamos datas fictícias para comparar apenas as horas
+      // REGRA 1: Validar horário (Max 2h)
       const inicioTemp = new Date(`2000-01-01T${formData.hora_inicio}`);
       const fimTemp = new Date(`2000-01-01T${formData.hora_fim}`);
       const diffHoras = (fimTemp - inicioTemp) / 1000 / 60 / 60;
@@ -34,11 +71,9 @@ export default function NewReservation() {
           throw new Error("Você não pode fazer reservas em datas passadas.");
       }
 
-      // 2. Pega usuário logado
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não logado");
 
-      // 3. Busca Perfil do Usuário
       const { data: profile } = await supabase
         .from('profiles')
         .select('account_id, apartamento')
@@ -47,7 +82,7 @@ export default function NewReservation() {
 
       if (!profile) throw new Error("Perfil não encontrado.");
 
-      // 4. REGRA DE JUSTIÇA (POR APARTAMENTO)
+      // REGRA DE JUSTIÇA (POR APARTAMENTO)
       const { data: moradoresDoAp } = await supabase
         .from('profiles')
         .select('id')
@@ -60,39 +95,35 @@ export default function NewReservation() {
         .from('reservations')
         .select('id')
         .in('user_id', idsDoApartamento)
-        .gte('data_inicio', new Date().toISOString()) // Garante que pega reservas atuais
+        .gte('data_inicio', new Date().toISOString()) 
         .limit(1);
 
       if (reservasDoAp && reservasDoAp.length > 0) {
         throw new Error(`O Apartamento ${profile.apartamento} já possui uma reserva ativa. A regra é uma por vez por apartamento.`);
       }
 
-      // --- CORREÇÃO DE FUSO HORÁRIO ---
-      // Criamos a data baseada no input do usuário (Brasil)
+      // CORREÇÃO DE FUSO HORÁRIO
       const dataLocalInicio = new Date(`${formData.data_reserva}T${formData.hora_inicio}`);
       const dataLocalFim = new Date(`${formData.data_reserva}T${formData.hora_fim}`);
 
-      // Convertemos para UTC antes de enviar ao banco
       const startDateTime = dataLocalInicio.toISOString();
       const endDateTime = dataLocalFim.toISOString();
-      // --------------------------------
 
-      // 5. Verifica choque de horário (Usando os horários corrigidos em UTC)
+      // Verifica choque de horário no carregador ESPECÍFICO
       const { data: choque, error: errorChoque } = await supabase
         .from('reservations')
         .select('id')
         .eq('account_id', profile.account_id)
-        .eq('charger_id', parseInt(formData.charger_id))
+        .eq('charger_id', parseInt(formData.charger_id)) // <-- Valida se o carregador X está livre
         .lt('data_inicio', endDateTime)
         .gt('data_fim', startDateTime);
 
       if (errorChoque) throw new Error("Erro ao verificar disponibilidade: " + errorChoque.message);
       
       if (choque && choque.length > 0) {
-         throw new Error("Ops! Já existe uma reserva para este carregador nesse horário.");
+         throw new Error(`Ops! O Carregador ${formData.charger_id} já está reservado nesse horário. Tente selecionar outro carregador ou alterar o horário.`);
       }
 
-      // 6. Salva (Com datas em UTC)
       const { error } = await supabase.from('reservations').insert({
         user_id: user.id,
         account_id: profile.account_id,
@@ -104,7 +135,7 @@ export default function NewReservation() {
       if (error) throw new Error("Erro ao salvar reserva: " + error.message);
 
       alert('Agendado com sucesso!');
-      navigate('/app');
+      navigate('/app'); // Ajustado para voltar pro /dashboard
 
     } catch (error) {
       alert(error.message);
@@ -133,27 +164,22 @@ export default function NewReservation() {
 
         <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             
-            {/* Seleção de Carregador */}
+            {/* SELEÇÃO DINÂMICA DE CARREGADOR */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Carregador</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Selecione o Carregador</label>
                 <div className="grid grid-cols-2 gap-4">
-                    <button 
-                        type="button"
-                        onClick={() => setFormData({...formData, charger_id: '1'})}
-                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${formData.charger_id === '1' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-gray-300'}`}
-                    >
-                        <Zap size={24} className={formData.charger_id === '1' ? 'fill-blue-600' : 'text-gray-400'}/>
-                        <span className="font-bold text-sm">Carregador 01</span>
-                    </button>
-
-                    <button 
-                        type="button"
-                        onClick={() => setFormData({...formData, charger_id: '2'})}
-                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${formData.charger_id === '2' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-gray-300'}`}
-                    >
-                        <Zap size={24} className={formData.charger_id === '2' ? 'fill-blue-600' : 'text-gray-400'}/>
-                        <span className="font-bold text-sm">Carregador 02</span>
-                    </button>
+                    {/* Esse código cria a quantidade exata de botões baseada no banco */}
+                    {Array.from({ length: maxChargers }, (_, i) => i + 1).map((num) => (
+                        <button 
+                            key={num}
+                            type="button"
+                            onClick={() => setFormData({...formData, charger_id: num.toString()})}
+                            className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${formData.charger_id === num.toString() ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-gray-300'}`}
+                        >
+                            <Zap size={24} className={formData.charger_id === num.toString() ? 'fill-blue-600' : 'text-gray-400'}/>
+                            <span className="font-bold text-sm">Carregador {num.toString().padStart(2, '0')}</span>
+                        </button>
+                    ))}
                 </div>
             </div>
 

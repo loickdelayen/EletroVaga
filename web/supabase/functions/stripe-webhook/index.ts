@@ -37,7 +37,7 @@ serve(async (req) => {
       // ✅ CASO 1: PAGAMENTO APROVADO (Entrada)
       case 'checkout.session.completed': {
         const session = event.data.object
-        const userId = session.metadata?.user_id // Garantir que está pegando do metadata certo
+        const userId = session.metadata?.user_id
 
         if (!userId) {
              console.log('⚠️ User ID não encontrado no metadata')
@@ -46,7 +46,6 @@ serve(async (req) => {
 
         console.log(`💰 Pagamento recebido do usuário: ${userId}`)
 
-        // Busca o perfil para achar a conta
         const { data: profile } = await supabase
           .from('profiles')
           .select('account_id')
@@ -54,13 +53,12 @@ serve(async (req) => {
           .single()
 
         if (profile?.account_id) {
-          // ATUALIZAÇÃO CRÍTICA: Salvamos o customer_id também!
           await supabase
             .from('accounts')
             .update({ 
               status: 'active',
               subscription_id: session.subscription,
-              stripe_customer_id: session.customer // <--- IMPORTANTE: Salva o ID do cliente Stripe
+              stripe_customer_id: session.customer 
             })
             .eq('id', profile.account_id)
           
@@ -76,7 +74,6 @@ serve(async (req) => {
 
         console.log(`❌ Assinatura cancelada para o cliente Stripe: ${stripeCustomerId}`)
 
-        // Procura a conta pelo ID do cliente Stripe e bloqueia
         const { error } = await supabase
           .from('accounts')
           .update({ status: 'canceled' })
@@ -95,7 +92,6 @@ serve(async (req) => {
 
         console.log(`⚠️ Pagamento falhou para: ${stripeCustomerId}`)
 
-        // Opcional: Mudar para 'past_due' (atrasado) ou manter ativo até o cancelamento final
         await supabase
           .from('accounts')
           .update({ status: 'past_due' })
@@ -107,7 +103,6 @@ serve(async (req) => {
       // 🔄 CASO 4: PAGAMENTO RECORRENTE BEM SUCEDIDO
       case 'invoice.payment_succeeded': {
          const invoice = event.data.object
-         // Garante que o status continua ativo todo mês
          if(invoice.billing_reason === 'subscription_cycle') {
              await supabase
               .from('accounts')
@@ -115,6 +110,43 @@ serve(async (req) => {
               .eq('stripe_customer_id', invoice.customer)
          }
          break;
+      }
+
+      // ⬆️ CASO 5: MUDANÇA DE PLANO (Upgrades / Downgrades / Reativação) -> MÁGICA NOVA AQUI
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object;
+        const customerId = subscription.customer;
+
+        // Pega o ID do produto atrelado a essa assinatura
+        const productId = subscription.items.data[0].price.product;
+
+        // Busca o produto lá no Stripe para ver se tem a etiqueta de carregadores
+        const product = await stripe.products.retrieve(productId as string);
+
+        // Lê a etiqueta. Se você esquecer de colocar no Stripe, ele assume 2 por segurança.
+        const limiteCarregadores = product.metadata.carregadores 
+          ? parseInt(product.metadata.carregadores) 
+          : 2;
+
+        console.log(`⬆️ Plano atualizado. Cliente ${customerId} agora tem limite de ${limiteCarregadores} carregadores.`);
+
+        // Se ele estava "past_due" e pagou pelo portal, o Stripe manda esse evento com status 'active'.
+        // Então aproveitamos para garantir que o condomínio volte a ficar ativo.
+        let novoStatus = subscription.status;
+        if (novoStatus === 'active' || novoStatus === 'trialing') {
+            novoStatus = 'active';
+        }
+
+        // Atualiza o banco com a nova quantidade e o status
+        await supabase
+          .from('accounts')
+          .update({ 
+            limite_carregadores: limiteCarregadores,
+            status: novoStatus
+          })
+          .eq('stripe_customer_id', customerId);
+
+        break;
       }
     }
 

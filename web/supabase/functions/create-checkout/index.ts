@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { Stripe } from "https://esm.sh/stripe?target=deno"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2" // <--- Import Novo
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
   // @ts-ignore
@@ -30,16 +30,21 @@ serve(async (req) => {
 
     const { price_base_id, email, return_url } = await req.json()
 
-    // 2. Usa o ID do token verificado, e não o que veio no corpo solto
+    // 2. Cria a sessão do Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{ price: price_base_id, quantity: 1 }],
       mode: 'subscription',
       success_url: `${return_url}/app?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${return_url}/checkout`,
-      customer_email: user.email, // Usa o email real do login
+      customer_email: user.email,
+      
+      // 👇 AQUI ESTÁ A MÁGICA DO CUPOM DE TESTE
+      allow_promotion_codes: true, 
+
       metadata: {
-        supabase_user_id: user.id, // Usa o ID real do login
+        // 👇 AQUI ESTÁ A CORREÇÃO DO BUG (Nome exato que o Webhook espera)
+        user_id: user.id, 
       },
     })
 

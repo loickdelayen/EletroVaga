@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Plus, Calendar, Share, Check, RefreshCw, Clock, Trash2, Home, User, Lock, CreditCard } from 'lucide-react';
-import logo from '../assets/eletrovagas-logo.png'; 
+import logo from '../assets/eletrovagas-logo.svg'; 
 import MembersList from '../components/MembersList';
 
 export default function Dashboard() {
@@ -39,8 +39,7 @@ export default function Dashboard() {
           .select('*')
           .eq('id', profile.account_id)
           .single();
-        
-        // --- 🔒 AQUI ESTAVA O ERRO! LÓGICA CORRIGIDA: ---
+
         // Antes: navigate('/checkout') -> Errado, mandava recriar conta
         // Agora: setIsLocked(true) -> Certo, mostra a tela de pagar faturas
         if (['canceled', 'past_due', 'unpaid'].includes(accountData.status)) {
@@ -95,7 +94,7 @@ export default function Dashboard() {
 
   if (loading) return <div className="h-screen flex items-center justify-center">Verificando...</div>;
 
-  // --- 🔒 TELA DE BLOQUEIO (RENDERIZAÇÃO) ---
+  // --- TELA DE BLOQUEIO (RENDERIZAÇÃO) ---
   if (isLocked) {
       return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
@@ -133,7 +132,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 pb-24">
       <header className="bg-white py-6 px-6 shadow-sm flex justify-between items-center sticky top-0 z-10">
         <div>
-          <img src={logo} alt="Logo" className="h-8 w-auto object-contain mb-1" />
+          <img src={logo} alt="Logo" className="h-12 w-auto object-contain mb-1" />
           <p className="text-gray-500 text-xs font-medium">{account?.nome_condominio}</p>
         </div>
         <button onClick={() => supabase.auth.signOut().then(() => navigate('/login'))} className="text-gray-400 hover:text-red-600">
@@ -174,15 +173,29 @@ export default function Dashboard() {
             <h3 className="font-bold text-lg mb-4 flex gap-2"><Calendar className="text-blue-600"/> Próximos</h3>
             <div className="space-y-3">
                 {reservations.map(r => (
-                    <div key={r.id} className="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center">
+                    <div key={r.id} className="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center border-l-4 border-blue-500">
                         <div className="flex items-center gap-4">
-                            <div className="bg-gray-100 p-2 rounded text-center"><span className="text-xl font-bold">{new Date(r.data_inicio).getDate()}</span></div>
+                            <div className="bg-gray-100 p-2 rounded text-center min-w-[3rem]">
+                                <span className="text-xl font-bold">{new Date(r.data_inicio).getDate()}</span>
+                            </div>
                             <div>
-                                <p className="font-bold">{new Date(r.data_inicio).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                                <p className="text-sm text-gray-500">{r.profiles?.full_name} - {r.profiles?.apartamento}</p>
+                                <div className="flex items-center gap-2 mb-0.5">
+                                    <p className="font-bold text-gray-900">
+                                        {new Date(r.data_inicio).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    </p>
+                                    {/* AQUI ESTÁ A MÁGICA: A etiqueta do Carregador */}
+                                    <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                        Carregador {r.charger_id || 1}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-gray-500">{r.profiles?.full_name} - Ap {r.profiles?.apartamento}</p>
                             </div>
                         </div>
-                        {(account.role === 'admin' || user.id === r.profiles?.id) && <button onClick={() => handleDeleteReservation(r.id)}><Trash2 className="text-gray-300 hover:text-red-500"/></button>}
+                        {(account.role === 'admin' || user.id === r.profiles?.id) && (
+                            <button onClick={() => handleDeleteReservation(r.id)} className="p-2">
+                                <Trash2 className="text-gray-300 hover:text-red-500 transition-colors"/>
+                            </button>
+                        )}
                     </div>
                 ))}
             </div>
