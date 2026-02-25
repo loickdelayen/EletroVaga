@@ -7,19 +7,19 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'eletrovaga-logo.png'], // Seus arquivos estáticos
+      includeAssets: ['favicon.png', 'eletrovagas-logo.svg'], // Seus arquivos estáticos
       manifest: {
-        name: 'EletroVaga',
-        short_name: 'EletroVaga',
-        description: 'Gestão de Recargas para Condomínios',
+        name: 'EletroVagas',
+        short_name: 'EletroVagas',
+        description: 'Gestão de Carregadores para Condomínios',
         theme_color: '#2563eb', // Azul do seu site
         background_color: '#ffffff',
         display: 'standalone', // Faz parecer app nativo (sem barra do navegador)
         orientation: 'portrait',
-        start_url: '/login', // <--- Importante: Quando instalar, abre direto no Login!
+        start_url: '/login', 
         icons: [
           {
-            src: 'pwa-192x192.png', // Você precisará criar esses ícones (explico abaixo)
+            src: 'pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
