@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
-import { Capacitor } from '@capacitor/core'; // <--- Importante para detectar se é App
+import { Capacitor } from '@capacitor/core';
+import { Analytics } from "@vercel/analytics/next"
+
 
 // IMPORTANDO TODAS AS PÁGINAS
 import LandingPage from './pages/LandingPage';
@@ -11,6 +13,8 @@ import Checkout from './pages/Checkout';
 import RegisterMorador from './pages/RegisterMorador';
 import NewReservation from './pages/NewReservation'; 
 import UserProfile from './pages/UserProfile';
+import CheckoutSolar from './pages/CheckoutSolar';
+import DashboardSolar from './pages/DashboardSolar';
 
 // Componente que decide: É App ou Site?
 function HomeRedirect() {
@@ -71,6 +75,10 @@ export default function App() {
            path="/perfil"
            element={session ? <UserProfile /> : <Navigate to="/login" />} 
         />
+
+        <Route path="/checkout-solar" element={<CheckoutSolar />} />
+
+        <Route path="/solar" element={<DashboardSolar />} />
 
         {/* Se não achar nada, joga pra raiz (loop) */}
         <Route path="*" element={<Navigate to="/" />} />
